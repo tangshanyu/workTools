@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>SQL 參數替換工具</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; background-color: #f8f9fa; }
+    h1 { color: #343a40; }
+    textarea, button { width: 100%; margin-bottom: 10px; font-family: monospace; padding: 10px; }
+    textarea { height: 150px; border: 1px solid #ced4da; border-radius: 5px; }
+    button { background-color: #007bff; color: white; border: none; cursor: pointer; border-radius: 5px; }
+    button:hover { background-color: #0056b3; }
+    #paramsContainer { margin-top: 20px; padding: 10px; background: #ffffff; border: 1px solid #ced4da; border-radius: 5px; }
+    .param-input { display: block; margin: 5px 0; padding: 5px; width: 100%; }
+    #output-container { margin-top: 20px; padding: 10px; background: #ffffff; border: 1px solid #ced4da; border-radius: 5px; position: relative; }
+    #copyBtn { display: block; margin-top: 10px; background-color: #28a745; color: white; border: none; padding: 5px 10px; cursor: pointer; border-radius: 3px; }
+    #copyBtn:hover { background-color: #218838; }
+    #output { white-space: pre-wrap; font-family: monospace; }
+  </style>
+</head>
+<body>
+  <h1>SQL 參數替換工具</h1>
+
+  <label for="sqlInput">輸入 SQL：</label><br>
+  <textarea id="sqlInput"></textarea>
+
+  <button onclick="extractParams()">掃描參數</button>
+
+  <h2>參數輸入：</h2>
+  <div id="paramsContainer"></div>
+
+  <button onclick="replaceParams()">執行替換</button>
+
+  <h2>最終 SQL：</h2>
+  <div id="output-container">
+    <pre id="output"></pre>
+    <button id="copyBtn" onclick="copySQL()">複製</button>
+  </div>
+
+  <script>
+    function extractParams() {
+      const sql = document.getElementById("sqlInput").value;
+      const paramPattern = /'Parm\d+'/g;
+      const matches = [...new Set(sql.match(paramPattern))]; // 去重複
+
+      const paramsContainer = document.getElementById("paramsContainer");
+      paramsContainer.innerHTML = ""; // 清空原來內容
+
+      if (matches.length === 0) {
+        paramsContainer.innerHTML = "<p>未找到任何 'ParmX' 參數。</p>";
+        return;
+      }
+
+      matches.forEach(param => {
+        const input = document.createElement("input");
+        input.type = "text";
+        input.className = "param-input";
+        input.placeholder = `替換 ${param}`;
+        input.dataset.param = param; // 記錄參數名稱
+        paramsContainer.appendChild(input);
+      });
+    }
+
+    function replaceParams() {
+      let sql = document.getElementById("sqlInput").value;
+      const inputs = document.querySelectorAll(".param-input");
+
+      inputs.forEach(input => {
+        const param = input.dataset.param;
+        const replacement = input.value.trim();
+        sql = sql.replaceAll(param, `'${replacement.replace(/'/g, "''")}'`);
+      });
+
+      document.getElementById("output").innerText = sql;
+    }
+
+    function copySQL() {
+      const outputText = document.getElementById("output").innerText;
+      navigator.clipboard.writeText(outputText).then(() => {
+        alert("SQL 已複製！");
+      }).catch(err => {
+        alert("複製失敗：" + err);
+      });
+    }
+  </script>
+</body>
+</html>

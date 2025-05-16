@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>SQL 問號轉參數工具</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; background-color: #f8f9fa; }
+    h1 { color: #343a40; }
+    textarea, button { width: 100%; margin-bottom: 10px; font-family: monospace; padding: 10px; }
+    textarea { height: 150px; border: 1px solid #ced4da; border-radius: 5px; }
+    button { background-color: #007bff; color: white; border: none; cursor: pointer; border-radius: 5px; }
+    button:hover { background-color: #0056b3; }
+    #output-container { margin-top: 20px; padding: 10px; background: #ffffff; border: 1px solid #ced4da; border-radius: 5px; position: relative; }
+    #copyBtn { position: absolute; right: 10px; top: 10px; background-color: #28a745; color: white; border: none; padding: 5px 10px; cursor: pointer; border-radius: 3px; }
+    #copyBtn:hover { background-color: #218838; }
+    #output { white-space: pre-wrap; font-family: monospace; }
+  </style>
+</head>
+<body>
+  <h1>SQL 問號轉換工具</h1>
+
+  <label for="sqlInput">原始 SQL（含 ?）：</label><br>
+  <textarea id="sqlInput"></textarea>
+
+  <label for="paramsInput">參數（格式：[15761, 02, BCTOM0001, 2024/06/04]）：</label><br>
+  <textarea id="paramsInput"></textarea>
+
+  <button onclick="replaceSQL()">轉換</button>
+
+  <h2>轉換後的 SQL：</h2>
+  <div id="output-container">
+    <button id="copyBtn" onclick="copySQL()">複製</button>
+    <pre id="output"></pre>
+  </div>
+
+  <script>
+    function escapeString(str) {
+      return str.replace(/'/g, "''");
+    }
+
+    function smartParseParams(text) {
+      text = text.trim().replace(/^\[|\]$/g, '');
+      const items = text.split(/\s*,\s*/);
+      return items.map(item => `'${escapeString(item.trim())}'`);
+    }
+
+    function replaceSQL() {
+      const sql = document.getElementById("sqlInput").value;
+      const rawParams = document.getElementById("paramsInput").value;
+
+      let params;
+      try {
+        params = smartParseParams(rawParams);
+      } catch (e) {
+        alert("參數格式錯誤，請使用類似 [15761, 02, BCTOM0001, 2024/06/04]");
+        return;
+      }
+
+      let result = '';
+      let paramIndex = 0;
+
+      for (let i = 0; i < sql.length; i++) {
+        if (sql[i] === '?' && paramIndex < params.length) {
+          result += params[paramIndex++];
+        } else {
+          result += sql[i];
+        }
+      }
+
+      if (paramIndex < params.length) {
+        alert("⚠️ 有多餘的參數未被使用！");
+      }
+
+      document.getElementById("output").innerText = result;
+    }
+
+    function copySQL() {
+      const outputText = document.getElementById("output").innerText;
+      navigator.clipboard.writeText(outputText).then(() => {
+        alert("SQL 已複製！");
+      }).catch(err => {
+        alert("複製失敗：" + err);
+      });
+    }
+  </script>
+</body>
+</html>
