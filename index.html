@@ -4,71 +4,201 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>上班用小工具</title>
+  <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body {
-      margin: 0;
-      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-      background: #f2f4f8;
-      color: #333;
+      font-family: "Inter", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
     }
+    .sidebar-enter { transform: translateX(-100%); }
+    .sidebar-enter-active { transform: translateX(0); transition: transform 0.3s ease-out; }
+    .sidebar-leave-active { transform: translateX(-100%); transition: transform 0.3s ease-in; }
+    .overlay-enter-active { opacity: 1; transition: opacity 0.3s ease-out; }
+    .overlay-leave-active { opacity: 0; transition: opacity 0.3s ease-in; }
 
-    header {
-      background-color: #4a90e2;
+    /* 選單作用中連結的樣式 */
+    #sidebar nav a.active-link {
+      background-color: #4A5568; /* gray-700 */
       color: white;
-      padding: 1.5rem;
-      text-align: center;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-    }
-
-    main {
-      padding: 2rem;
-      text-align: center;
-    }
-
-    nav {
-      margin-top: 2rem;
-    }
-
-    a.button {
-      display: inline-block;
-      margin: 1rem;
-      padding: 0.75rem 1.5rem;
-      background-color: #4a90e2;
-      color: white;
-      text-decoration: none;
-      border-radius: 6px;
-      transition: background-color 0.3s;
-    }
-
-    a.button:hover {
-      background-color: #357ab8;
-    }
-
-    footer {
-      margin-top: 3rem;
-      padding: 1rem;
-      font-size: 0.9rem;
-      color: #888;
+      font-weight: 600;
     }
   </style>
 </head>
-<body>
-  <header>
-    <h1>歡迎來到我的網站</h1>
-    <p>這是一個簡單的靜態網站首頁</p>
+<body class="bg-gray-100 text-gray-800 flex flex-col min-h-screen">
+
+  <header class="bg-blue-600 text-white shadow-md sticky top-0 z-50">
+    <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+      <div class="flex items-center">
+        <button id="hamburgerButton" class="text-white focus:outline-none mr-4 lg:hidden">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"></path>
+          </svg>
+        </button>
+        <h1 class="text-xl sm:text-2xl font-semibold">歡迎來到我的網站</h1>
+      </div>
+      <p class="hidden sm:block text-sm">您的便捷小工具集合</p>
+    </div>
   </header>
 
-  <main>
-    <h2>請選擇頁面</h2>
-    <nav>
-      <a href="putSpecSql.html" class="button">把spec SQL參數替換</a>
-      <a href="changeQuestionMark.html" class="button">把java ? 替換參數</a>
-      <a href="addSbAppend.html" class="button">sql 轉換sb.append</a>
-    </nav>
-  </main>
+  <div class="flex flex-1">
+    <aside id="sidebar" class="fixed inset-y-0 left-0 bg-gray-800 text-white w-64 p-6 space-y-4 transform -translate-x-full lg:translate-x-0 lg:static lg:inset-0 lg:block transition-transform duration-300 ease-in-out z-40 shadow-lg">
+      <h2 class="text-xl font-semibold mb-6 border-b border-gray-700 pb-2">導覽選單</h2>
+      <nav class="flex flex-col space-y-3">
+        <a href="#" data-page="home.html" class="nav-link block py-2.5 px-4 rounded-lg hover:bg-gray-700 transition-colors duration-200">首頁</a>
+        <a href="#" data-page="putSpecSql.html" class="nav-link block py-2.5 px-4 rounded-lg hover:bg-gray-700 transition-colors duration-200">SPEC SQL參數替換</a>
+        <a href="#" data-page="changeQuestionMark.html" class="nav-link block py-2.5 px-4 rounded-lg hover:bg-gray-700 transition-colors duration-200">Java ? 替換參數</a>
+        <a href="#" data-page="addSbAppend.html" class="nav-link block py-2.5 px-4 rounded-lg hover:bg-gray-700 transition-colors duration-200">SQL 轉 sb.append</a>
+      </nav>
+    </aside>
 
-  <footer>
-    &copy; 2025 我的網站 ｜ 使用 GitHub Pages 製作
+    <div id="overlay" class="fixed inset-0 bg-black bg-opacity-50 hidden z-30 lg:hidden"></div>
+
+    <main class="flex-1 p-4 sm:p-6 md:p-8 overflow-y-auto">
+      <div id="content-area" class="w-full">
+        </div>
+    </main>
+  </div>
+
+  <footer class="bg-gray-200 text-gray-600 text-center p-4 mt-auto text-sm">
+    &copy; <span id="currentYear"></span> 我的網站 ｜ 使用 GitHub Pages 製作
   </footer>
+
+  <script>
+    // --- 漢堡選單控制邏輯 (來自原來的 immersive) ---
+    const hamburgerButton = document.getElementById('hamburgerButton');
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('overlay');
+
+    document.getElementById('currentYear').textContent = new Date().getFullYear();
+
+    function toggleSidebar() {
+      const isOpen = sidebar.classList.contains('translate-x-0');
+      if (isOpen) {
+        sidebar.classList.remove('translate-x-0');
+        sidebar.classList.add('-translate-x-full');
+        overlay.classList.add('hidden');
+        document.body.classList.remove('overflow-hidden');
+      } else {
+        sidebar.classList.remove('-translate-x-full');
+        sidebar.classList.add('translate-x-0');
+        overlay.classList.remove('hidden');
+        document.body.classList.add('overflow-hidden');
+      }
+    }
+
+    hamburgerButton.addEventListener('click', (event) => {
+      event.stopPropagation();
+      toggleSidebar();
+    });
+
+    overlay.addEventListener('click', () => {
+      toggleSidebar();
+    });
+
+    window.addEventListener('resize', () => {
+      if (window.innerWidth >= 1024) {
+        sidebar.classList.remove('-translate-x-full');
+        sidebar.classList.add('translate-x-0');
+        overlay.classList.add('hidden');
+        document.body.classList.remove('overflow-hidden');
+      } else {
+        if (!sidebar.classList.contains('translate-x-0')) {
+            sidebar.classList.add('-translate-x-full');
+        }
+      }
+    });
+
+    // --- 動態內容載入邏輯 ---
+    const contentArea = document.getElementById('content-area');
+    const sidebarLinks = document.querySelectorAll('#sidebar nav a.nav-link');
+    const baseContentPath = 'contents/'; // 內容檔案的基礎路徑
+    const defaultPage = 'home.html';    // 預設載入的頁面
+
+    // 載入內容到主區域
+    async function loadContent(pageName) {
+        const pageFile = pageName.endsWith('.html') ? pageName : `${pageName}.html`;
+        const pagePath = baseContentPath + pageFile;
+
+        // 顯示載入中的提示 (可選)
+        contentArea.innerHTML = `<div class="text-center p-10"><p class="text-gray-500">載入中...</p></div>`;
+
+        try {
+            const response = await fetch(pagePath);
+            if (!response.ok) {
+                throw new Error(`HTTP 錯誤! 狀態碼: ${response.status} 於 ${pagePath}`);
+            }
+            const html = await response.text();
+            contentArea.innerHTML = html;
+            updateActiveLink(pageFile);
+            
+            // 更新 URL hash，但不重複加入歷史紀錄
+            const targetHash = `#${pageName.replace('.html', '')}`;
+            if (window.location.hash !== targetHash) {
+                 window.location.hash = targetHash;
+            }
+            attachMainContentLinkListeners(); // 為新載入的內容中的連結綁定事件
+        } catch (error) {
+            console.error('載入頁面錯誤:', error);
+            contentArea.innerHTML = `<div class="p-6 bg-red-100 border border-red-400 text-red-700 rounded-lg">
+                                       <h3 class="font-bold">內容載入失敗</h3>
+                                       <p>無法載入頁面: ${pageName}</p>
+                                       <p>錯誤訊息: ${error.message}</p>
+                                       <p>請檢查檔案路徑 '${pagePath}' 是否正確且檔案存在。</p>
+                                     </div>`;
+        }
+    }
+
+    // 更新側邊欄作用中連結的樣式
+    function updateActiveLink(currentPageFile) {
+        sidebarLinks.forEach(link => {
+            const linkPage = link.dataset.page;
+            if (linkPage === currentPageFile) {
+                link.classList.add('active-link');
+            } else {
+                link.classList.remove('active-link');
+            }
+        });
+    }
+
+    // 處理 URL hash 變更 (用於瀏覽器上一頁/下一頁及直接URL存取)
+    function handleHashChange() {
+        const hash = window.location.hash.substring(1); // 移除 #
+        const pageToLoad = hash || defaultPage.replace('.html', '');
+        loadContent(pageToLoad);
+    }
+
+    // 為側邊欄連結綁定點擊事件
+    sidebarLinks.forEach(link => {
+        link.addEventListener('click', function(event) {
+            event.preventDefault();
+            const pageName = this.dataset.page;
+            loadContent(pageName.replace('.html', ''));
+            if (window.innerWidth < 1024) { // 小螢幕點擊後關閉選單
+                toggleSidebar();
+            }
+        });
+    });
+
+    // 為主要內容區域中可能存在的 data-page 連結綁定事件
+    function attachMainContentLinkListeners() {
+        const currentMainContentLinks = contentArea.querySelectorAll('a[data-page]');
+        currentMainContentLinks.forEach(link => {
+            if (!link.dataset.listenerAttached) { // 防止重複綁定
+                link.addEventListener('click', function(event) {
+                    event.preventDefault();
+                    const pageName = this.dataset.page;
+                    loadContent(pageName.replace('.html', ''));
+                });
+                link.dataset.listenerAttached = 'true';
+            }
+        });
+    }
+
+    // 頁面初次載入時，根據 hash 或預設值載入內容
+    window.addEventListener('DOMContentLoaded', () => {
+        handleHashChange(); // 根據初始 hash 載入內容
+        window.addEventListener('hashchange', handleHashChange); // 監聽 hash 變更
+    });
+
+  </script>
 </body>
 </html>
