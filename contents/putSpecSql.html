@@ -1,60 +1,53 @@
-<!DOCTYPE html>
-<html lang="zh-TW">
-<head>
-  <meta charset="UTF-8">
-  <title>SQL 參數替換工具</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; background-color: #f8f9fa; }
-    h1 { color: #343a40; }
-    textarea, button { width: 100%; margin-bottom: 10px; font-family: monospace; padding: 10px; }
-    textarea { height: 150px; border: 1px solid #ced4da; border-radius: 5px; }
-    button { background-color: #007bff; color: white; border: none; cursor: pointer; border-radius: 5px; }
-    button:hover { background-color: #0056b3; }
-    #paramsContainer { margin-top: 20px; padding: 10px; background: #ffffff; border: 1px solid #ced4da; border-radius: 5px; }
-    .param-input { display: block; margin: 5px 0; padding: 5px; width: 100%; }
-    #output-container { margin-top: 20px; padding: 10px; background: #ffffff; border: 1px solid #ced4da; border-radius: 5px; position: relative; }
-    #copyBtn { display: block; margin-top: 10px; background-color: #28a745; color: white; border: none; padding: 5px 10px; cursor: pointer; border-radius: 3px; }
-    #copyBtn:hover { background-color: #218838; }
-    #output { white-space: pre-wrap; font-family: monospace; }
-  </style>
-</head>
-<body>
-  <h1>SQL 參數替換工具</h1>
+<div class="sql-tool-container p-4 sm:p-6 bg-white rounded-lg shadow mb-6">
+    <h1 class="text-2xl font-semibold mb-4 text-gray-800">SQL 參數替換工具</h1>
 
-  <label for="sqlInput">輸入 SQL：</label><br>
-  <textarea id="sqlInput"></textarea>
+    <label for="sqlInput" class="block text-gray-700 font-medium mb-1">輸入 SQL：</label>
+    <textarea id="sqlInput" class="w-full mb-4 font-mono p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-40 resize-y"></textarea>
 
-  <button onclick="extractParams()">掃描參數</button>
+    <button onclick="extractParams()" class="w-full mb-4 bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 transition duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">掃描參數</button>
 
-  <h2>參數輸入：</h2>
-  <div id="paramsContainer"></div>
+    <h2 class="text-xl font-semibold mb-3 text-gray-800">參數輸入：</h2>
+    <div id="paramsContainer" class="mt-2 p-4 bg-gray-50 border border-gray-200 rounded-md">
+        <p class="text-gray-500">點擊「掃描參數」後，這裡會出現參數輸入框。</p>
+    </div>
 
-  <button onclick="replaceParams()">執行替換</button>
+    <button onclick="replaceParams()" class="w-full mt-6 bg-green-600 text-white py-2 rounded-md hover:bg-green-700 transition duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">執行替換</button>
 
-  <h2>最終 SQL：</h2>
-  <div id="output-container">
-    <pre id="output"></pre>
-    <button id="copyBtn" onclick="copySQL()">複製</button>
-  </div>
+    <h2 class="text-xl font-semibold mb-3 mt-6 text-gray-800">最終 SQL：</h2>
+    <div id="output-container" class="mt-2 p-4 bg-gray-50 border border-gray-200 rounded-md relative">
+        <pre id="output" class="whitespace-pre-wrap font-mono text-gray-800"></pre>
+        <button id="copyBtn" onclick="copySQL()" class="mt-4 bg-teal-600 text-white py-2 px-4 rounded-md hover:bg-teal-700 transition duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2">複製</button>
+    </div>
+</div>
 
-  <script>
+<script>
+    // JavaScript logic for the SQL tool
     function extractParams() {
-      const sql = document.getElementById("sqlInput").value;
+      const sqlInput = document.getElementById("sqlInput");
+      if (!sqlInput) return; // 確保元素存在
+      const sql = sqlInput.value;
+
+      // 匹配 'Parm' 後面接著一個或多個數字，並且用單引號包圍
       const paramPattern = /'Parm\d+'/g;
-      const matches = [...new Set(sql.match(paramPattern))]; // 去重複
+      const matches = sql.match(paramPattern);
+      // 使用 Set 來去重複，並轉回陣列
+      const uniqueMatches = matches ? [...new Set(matches)] : [];
+
 
       const paramsContainer = document.getElementById("paramsContainer");
+      if (!paramsContainer) return; // 確保元素存在
       paramsContainer.innerHTML = ""; // 清空原來內容
 
-      if (matches.length === 0) {
-        paramsContainer.innerHTML = "<p>未找到任何 'ParmX' 參數。</p>";
+      if (uniqueMatches.length === 0) {
+        paramsContainer.innerHTML = "<p class='text-gray-600'>未找到任何 'ParmX' 參數。</p>";
         return;
       }
 
-      matches.forEach(param => {
+      uniqueMatches.forEach(param => {
         const input = document.createElement("input");
         input.type = "text";
-        input.className = "param-input";
+        // 使用 Tailwind classes for styling
+        input.className = "param-input block my-2 p-2 w-full border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-400";
         input.placeholder = `替換 ${param}`;
         input.dataset.param = param; // 記錄參數名稱
         paramsContainer.appendChild(input);
@@ -62,26 +55,55 @@
     }
 
     function replaceParams() {
-      let sql = document.getElementById("sqlInput").value;
-      const inputs = document.querySelectorAll(".param-input");
+      const sqlInput = document.getElementById("sqlInput");
+      const outputElement = document.getElementById("output");
+      if (!sqlInput || !outputElement) return; // 確保元素存在
+
+      let sql = sqlInput.value;
+      // 注意：這裡使用 document.querySelectorAll 假設這些元素在載入的內容中是唯一的 ID
+      const inputs = document.querySelectorAll("#paramsContainer .param-input"); // 明確指定在 paramsContainer 內查詢
 
       inputs.forEach(input => {
         const param = input.dataset.param;
-        const replacement = input.value.trim();
-        sql = sql.replaceAll(param, `'${replacement.replace(/'/g, "''")}'`);
+        const replacement = input.value; // 不要 trim(), 保留前後空白如果使用者輸入的話
+        // 替換邏輯：將 'ParmX' 替換為單引號包圍的替換值，並對替換值中的單引號進行轉義（雙引號）
+        // 使用正則表達式 G 標誌 (全域替換)
+        // 確保 param 變數中的特殊字元在正則表達式中被正確處理
+        const regex = new RegExp(param.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g');
+        sql = sql.replace(regex, `'${replacement.replace(/'/g, "''")}'`);
       });
 
-      document.getElementById("output").innerText = sql;
+      outputElement.innerText = sql;
     }
 
     function copySQL() {
-      const outputText = document.getElementById("output").innerText;
+      const outputElement = document.getElementById("output");
+      if (!outputElement) {
+          alert("找不到輸出內容！");
+          return;
+      }
+      const outputText = outputElement.innerText;
+
+      // 使用 navigator.clipboard.writeText 複製
       navigator.clipboard.writeText(outputText).then(() => {
-        alert("SQL 已複製！");
+        // 可以考慮換成一個更友好的提示，而不是 alert
+        alert("SQL 已複製到剪貼簿！");
       }).catch(err => {
-        alert("複製失敗：" + err);
+        console.error('複製失敗:', err);
+        // 提供一個備用方案，雖然 alert 裡顯示錯誤也可以
+        alert("複製失敗，請手動複製。錯誤：" + err);
       });
     }
-  </script>
-</body>
-</html>
+
+    // 當這個腳本被執行時（在內容載入後），呼叫初始化函式
+    function initializeSqlTool() {
+        console.log("SQL Tool initialized.");
+        // 如果需要在載入時就掃描 SQL Input 的內容（例如從 hash 中讀取）
+        // 可以在這裡呼叫 extractParams();
+    }
+
+    // 頁面內容載入後，執行 SQL Tool 的初始化邏輯
+    // 由於整個 script 標籤是動態添加到頁面的，腳本會自動執行
+    initializeSqlTool();
+
+</script>
