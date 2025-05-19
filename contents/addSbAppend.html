@@ -1,0 +1,225 @@
+<div class="sql-to-append-tool-container p-4 sm:p-6 bg-white rounded-lg shadow mb-6">
+  <h1 class="text-2xl font-semibold mb-4 text-gray-800">SQL 轉 Java sb.append()</h1>
+
+  <label for="input" class="block text-gray-700 font-medium mb-1">貼上你的 SQL：</label>
+  <textarea id="input" class="w-full mb-4 font-mono p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-40 resize-y" placeholder="貼上你的 SQL..."></textarea>
+
+  <div class="options mb-4">
+    <label class="inline-flex items-center mr-4">
+      <input type="checkbox" id="useCamel" checked class="form-checkbox h-5 w-5 text-blue-600">
+      <span class="ml-2 text-gray-700">使用駝峰命名</span>
+    </label>
+    <label class="inline-flex items-center mr-4">
+      <input type="checkbox" id="addAs" checked class="form-checkbox h-5 w-5 text-blue-600">
+      <span class="ml-2 text-gray-700">SELECT 欄位自動加 AS</span>
+    </label>
+    <label class="inline-flex items-center">
+      <input type="checkbox" id="genScalar" class="form-checkbox h-5 w-5 text-blue-600">
+      <span class="ml-2 text-gray-700">產生 HibernateScalarHelper</span>
+    </label>
+  </div>
+
+  <button onclick="convertSql()" class="w-full mb-6 bg-green-600 text-white py-2 rounded-md hover:bg-green-700 transition duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">轉換</button>
+
+  <h3 class="text-xl font-semibold mb-3 text-gray-800">sb.append() 結果</h3>
+  <textarea id="output" class="w-full mb-4 font-mono p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-40 resize-y" placeholder="sb.append() 結果..."></textarea>
+  <button class="copy-button mb-4 bg-teal-600 text-white py-2 px-4 rounded-md hover:bg-teal-700 transition duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2" onclick="copyToClipboard('output')">複製</button>
+
+
+  <h3 class="text-xl font-semibold mb-3 mt-6 text-gray-800">HibernateScalarHelper List</h3>
+  <textarea id="scalarOutput" class="w-full mb-4 font-mono p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-40 resize-y" placeholder="scalarList 結果..."></textarea>
+  <button class="copy-button mb-4 bg-teal-600 text-white py-2 px-4 rounded-md hover:bg-teal-700 transition duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2" onclick="copyToClipboard('scalarOutput')">複製</button>
+
+
+  <script>
+    function toCamelCase(s) {
+      return s.toLowerCase().replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+    }
+
+    // 更新複製功能，使用 navigator.clipboard
+    function copyToClipboard(id) {
+      const textarea = document.getElementById(id);
+      if (!textarea) {
+          console.error(`找不到元素 ID: ${id}`);
+          alert("複製失敗：找不到目標元素。");
+          return;
+      }
+      const textToCopy = textarea.value;
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(textToCopy).then(() => {
+          // 可以替換成更友好的提示方式
+          alert("內容已複製到剪貼簿！");
+        }).catch(err => {
+          console.error('複製失敗:', err);
+          alert("複製失敗，請手動複製。錯誤：" + err);
+        });
+      } else {
+        // 回退方案，如果瀏覽器不支持 navigator.clipboard
+        textarea.select();
+        try {
+          document.execCommand("copy");
+          alert("內容已複製到剪貼簿！ (備用方案)");
+        } catch (err) {
+          console.error('備用複製方案失敗:', err);
+          alert("複製失敗，請手動複製。");
+        }
+      }
+    }
+
+
+    function convertSql() {
+      const sqlInput = document.getElementById('input');
+      const outputElement = document.getElementById('output');
+      const scalarOutputElement = document.getElementById('scalarOutput');
+      const useCamelCheckbox = document.getElementById('useCamel');
+      const addAsCheckbox = document.getElementById('addAs');
+      const genScalarCheckbox = document.getElementById('genScalar');
+
+      if (!sqlInput || !outputElement || !scalarOutputElement || !useCamelCheckbox || !addAsCheckbox || !genScalarCheckbox) {
+          console.error("找不到必要的輸入或輸出元素");
+          alert("網頁元素載入錯誤，請刷新頁面。");
+          return;
+      }
+
+
+      const sql = sqlInput.value;
+      const useCamel = useCamelCheckbox.checked;
+      const addAs = addAsCheckbox.checked;
+      const genScalar = genScalarCheckbox.checked;
+
+      const lines = sql.split(/\r?\n/);
+      const sbLines = [];
+      const scalarLines = [];
+
+      let insideCaseBlock = false;
+      lines.forEach(line => {
+        const rawIndent = (line.match(/^\s*/)?.[0] || '').replace(/\t/g, '    '); // 使用?. 避免 null
+        const parts = line.trim().split(/--(.+)/);
+        const codeRaw = parts[0] ? parts[0].trim().replace(/,$/, '') : '';
+        const comment = parts[1] ? parts[1].trim() : '';
+        if (!codeRaw) return;
+
+        // 考慮更精確地判斷是否是 SELECT 欄位行
+        // 簡單判斷是否以 SELECT 開頭，或者在 CASE WHEN ... END 區塊內
+        const isSelectFieldLine = (/^\s*SELECT\b/i.test(line) || /^\s*,/i.test(line)) && !/FROM\b/i.test(line);
+        const isCaseStart = /\bCASE\b/i.test(codeRaw);
+        const isCaseEnd = /\bEND\b/i.test(codeRaw);
+
+        if (isCaseStart) insideCaseBlock = true;
+        // 如果 END 在同一行結束 CASE 區塊，則在處理完當前行後將 insideCaseBlock 設為 false
+        if (isCaseEnd && !isCaseStart) insideCaseBlock = false; // 避免 CASE ... END 在同一行時立即關閉
+
+        let sbLine = '';
+
+        if (isSelectFieldLine || insideCaseBlock) {
+          const hasComma = codeRaw.startsWith(',');
+          const comma = hasComma ? ',' : '';
+          let expr = hasComma ? codeRaw.slice(1).trim() : codeRaw;
+
+          let fieldExpr = expr;
+          let aliasRaw = null;
+          // 考慮多個空格的情況
+          const asMatch = expr.match(/\s+AS\s+/i);
+          if (asMatch) {
+            const asIndex = asMatch.index;
+            fieldExpr = expr.substring(0, asIndex).trim();
+            aliasRaw = expr.substring(asIndex + asMatch[0].length).trim();
+          }
+
+
+          const langMatch = /_LANG\d+$/i.test(fieldExpr);
+          if ((langMatch || insideCaseBlock) && addAs) {
+            const baseField = fieldExpr.replace(/_LANG\d+$/i, '');
+            // 從別名或欄位名中提取並處理，去除末尾可能的逗號
+            const aliasPart = (aliasRaw || baseField.split('.').pop() || '').replace(/,$/, '').trim();
+            const alias = useCamel ? toCamelCase(aliasPart) : aliasPart;
+
+            sbLine = 'sb.append(" ' + rawIndent + comma + baseField + '")'
+              + '.append(lang)';
+
+            // 如果不是在 CASE 區塊內，且有別名，才加 AS 別名
+            if (!insideCaseBlock && alias) {
+              sbLine += '.append(" AS ' + alias + ' ");';
+            } else {
+              sbLine += '.append(" ");'; // 否則只加一個空格
+            }
+
+
+            if (comment) sbLine += ' // ' + comment;
+            if (genScalar && alias) {
+              // 確保 alias 不為空或純空白
+              if (alias.trim() !== '') {
+                // 判斷資料類型，這裡假設 STRING，可以根據需要擴充
+                scalarLines.push(
+                  'scalarList.add(new HibernateScalarHelper("' + alias + '", StandardBasicTypes.STRING));'
+                );
+              }
+            }
+          } else {
+            // 非 _LANG 結尾或不在 CASE 區塊內
+            let alias = aliasRaw;
+            if (!alias) {
+              // 從欄位表達式中嘗試提取別名（例如 table.field）
+              const parts = fieldExpr.split('.');
+              if (parts.length > 1) {
+                alias = parts.pop()?.replace(/,$/, '').trim(); // 使用?. 避免 null
+              } else {
+                // 如果沒有點，可能是單純的欄位名，去除末尾可能的逗號
+                alias = fieldExpr.replace(/,$/, '').trim();
+              }
+            }
+            // 處理別名的大小寫轉換
+            const aliasFinal = (alias && alias.trim() !== '') ? (useCamel ? toCamelCase(alias) : alias) : null;
+
+
+            // 構建 append 的內容
+            let content = comma + fieldExpr;
+            if (addAs && aliasFinal) {
+              content += ' AS ' + aliasFinal;
+            }
+
+            sbLine = 'sb.append(" ' + rawIndent + content + ' ");';
+            if (comment) sbLine += ' // ' + comment;
+
+            // 產生 ScalarHelper
+            if (genScalar && aliasFinal) {
+              scalarLines.push(
+                'scalarList.add(new HibernateScalarHelper("' + aliasFinal + '", StandardBasicTypes.STRING));'
+              );
+            }
+          }
+        } else {
+          // 非 SELECT 欄位行，直接 append
+          sbLine = 'sb.append(" ' + rawIndent + codeRaw + ' ");';
+          if (comment) sbLine += ' // ' + comment;
+        }
+
+        sbLines.push(sbLine);
+
+        // 如果當前行是 CASE END，並且不是 CASE ... END 在同一行，才在這個地方關閉 insideCaseBlock
+        if (isCaseEnd && !isCaseStart) insideCaseBlock = false;
+
+
+      });
+
+      outputElement.value = sbLines.join("\n");
+      if (genScalar && scalarLines.length) {
+        scalarOutputElement.value =
+          'List<HibernateScalarHelper> scalarList = new ArrayList<>();\n'
+          + scalarLines.join("\n");
+      } else {
+        scalarOutputElement.value = '';
+      }
+    }
+
+    // 頁面內容載入後，執行初始化邏輯 (如果需要的話)
+    function initializeAddSbAppendTool() {
+        console.log("SQL to sb.append() Tool initialized.");
+        // 如果需要在載入時做任何事情，可以在這裡添加
+    }
+
+    // 當這個腳本被執行時，呼叫初始化函式
+    initializeAddSbAppendTool();
+
+  </script>
