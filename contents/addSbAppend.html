@@ -19,26 +19,29 @@
     </label>
   </div>
 
-  <button onclick="convertSql()" class="w-full mb-6 bg-green-600 text-white py-2 rounded-md hover:bg-green-700 transition duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">轉換</button>
+    <button id="convertSqlBtn" class="w-full mb-6 bg-green-600 text-white py-2 rounded-md hover:bg-green-700 transition duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">轉換</button>
 
   <h3 class="text-xl font-semibold mb-3 text-gray-800">sb.append() 結果</h3>
   <textarea id="output" class="w-full mb-4 font-mono p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-40 resize-y" placeholder="sb.append() 結果..."></textarea>
-  <button class="copy-button mb-4 bg-teal-600 text-white py-2 px-4 rounded-md hover:bg-teal-700 transition duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2" onclick="copyToClipboard('output')">複製</button>
+    <button data-copy-target="output" class="copy-button mb-4 bg-teal-600 text-white py-2 px-4 rounded-md hover:bg-teal-700 transition duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2">複製</button>
 
 
   <h3 class="text-xl font-semibold mb-3 mt-6 text-gray-800">HibernateScalarHelper List</h3>
   <textarea id="scalarOutput" class="w-full mb-4 font-mono p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-40 resize-y" placeholder="scalarList 結果..."></textarea>
-  <button class="copy-button mb-4 bg-teal-600 text-white py-2 px-4 rounded-md hover:bg-teal-700 transition duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2" onclick="copyToClipboard('scalarOutput')">複製</button>
+    <button data-copy-target="scalarOutput" class="copy-button mb-4 bg-teal-600 text-white py-2 px-4 rounded-md hover:bg-teal-700 transition duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2">複製</button>
 
 
   <script>
     function toCamelCase(s) {
+      if (!s) return '';
       return s.toLowerCase().replace(/_([a-z])/g, (_, c) => c.toUpperCase());
     }
 
-    // 更新複製功能，使用 navigator.clipboard
+    // 更新複製功能，使用 navigator.clipboard，並從點擊的按鈕獲取目標 ID
     function copyToClipboard(id) {
+      // 不再需要從參數獲取 id，而是直接使用傳入的 id
       const textarea = document.getElementById(id);
+
       if (!textarea) {
           console.error(`找不到元素 ID: ${id}`);
           alert("複製失敗：找不到目標元素。");
@@ -48,14 +51,13 @@
 
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(textToCopy).then(() => {
-          // 可以替換成更友好的提示方式
           alert("內容已複製到剪貼簿！");
         }).catch(err => {
           console.error('複製失敗:', err);
           alert("複製失敗，請手動複製。錯誤：" + err);
         });
       } else {
-        // 回退方案，如果瀏覽器不支持 navigator.clipboard
+          // 回退方案，如果瀏覽器不支持 navigator.clipboard
         textarea.select();
         try {
           document.execCommand("copy");
@@ -64,9 +66,9 @@
           console.error('備用複製方案失敗:', err);
           alert("複製失敗，請手動複製。");
         }
+        textarea.blur(); // 移除選取
       }
     }
-
 
     function convertSql() {
       const sqlInput = document.getElementById('input');
@@ -94,23 +96,34 @@
 
       let insideCaseBlock = false;
       lines.forEach(line => {
-        const rawIndent = (line.match(/^\s*/)?.[0] || '').replace(/\t/g, '    '); // 使用?. 避免 null
-        const parts = line.trim().split(/--(.+)/);
-        const codeRaw = parts[0] ? parts[0].trim().replace(/,$/, '') : '';
-        const comment = parts[1] ? parts[1].trim() : '';
-        if (!codeRaw) return;
+        // 處理縮排，將 Tab 轉換為 4 個空格
+        const rawIndent = (line.match(/^\s*/)?.[0] || '').replace(/\t/g, '    ');
+        // 分割程式碼和註解
+        const commentMatch = line.match(/--(.+)/);
+        const comment = commentMatch ? commentMatch[1].trim() : '';
+        const codeRaw = line.substring(0, commentMatch ? commentMatch.index : line.length).trim().replace(/,$/, '');
+
+
+        if (!codeRaw && !comment) return; // 跳過空行或只有空白的行
 
         // 考慮更精確地判斷是否是 SELECT 欄位行
-        // 簡單判斷是否以 SELECT 開頭，或者在 CASE WHEN ... END 區塊內
-        const isSelectFieldLine = (/^\s*SELECT\b/i.test(line) || /^\s*,/i.test(line)) && !/FROM\b/i.test(line);
+        // 簡單判斷是否以 SELECT 開頭，或者在 CASE WHEN ... END 區塊內，並且不是 FROM, WHERE, GROUP BY 等行
+        const lowerCode = codeRaw.toLowerCase();
+        const isSelectFieldLine = (lowerCode.startsWith('select') || lowerCode.startsWith(',')) &&
+                                 !lowerCode.includes(' from ') &&
+                                 !lowerCode.includes(' where ') &&
+                                 !lowerCode.includes(' group by ') &&
+                                 !lowerCode.includes(' order by ') &&
+                                 !lowerCode.includes(' having ');
+
+
         const isCaseStart = /\bCASE\b/i.test(codeRaw);
         const isCaseEnd = /\bEND\b/i.test(codeRaw);
 
         if (isCaseStart) insideCaseBlock = true;
-        // 如果 END 在同一行結束 CASE 區塊，則在處理完當前行後將 insideCaseBlock 設為 false
-        if (isCaseEnd && !isCaseStart) insideCaseBlock = false; // 避免 CASE ... END 在同一行時立即關閉
 
-        let sbLine = '';
+
+        let sbLineContent = ''; // 儲存要 append 的內容
 
         if (isSelectFieldLine || insideCaseBlock) {
           const hasComma = codeRaw.startsWith(',');
@@ -129,32 +142,24 @@
 
 
           const langMatch = /_LANG\d+$/i.test(fieldExpr);
-          if ((langMatch || insideCaseBlock) && addAs) {
+          if (langMatch && addAs) {
             const baseField = fieldExpr.replace(/_LANG\d+$/i, '');
-            // 從別名或欄位名中提取並處理，去除末尾可能的逗號
             const aliasPart = (aliasRaw || baseField.split('.').pop() || '').replace(/,$/, '').trim();
             const alias = useCamel ? toCamelCase(aliasPart) : aliasPart;
 
-            sbLine = 'sb.append(" ' + rawIndent + comma + baseField + '")'
-              + '.append(lang)';
+            sbLineContent = rawIndent + comma + baseField + '" + lang';
 
             // 如果不是在 CASE 區塊內，且有別名，才加 AS 別名
             if (!insideCaseBlock && alias) {
-              sbLine += '.append(" AS ' + alias + ' ");';
-            } else {
-              sbLine += '.append(" ");'; // 否則只加一個空格
+              sbLineContent += ' + " AS ' + alias; // 注意這裡 AS 別名也在 append 內容裡
             }
+            sbLineContent += ' '; // 最後加個空格
 
 
-            if (comment) sbLine += ' // ' + comment;
-            if (genScalar && alias) {
-              // 確保 alias 不為空或純空白
-              if (alias.trim() !== '') {
-                // 判斷資料類型，這裡假設 STRING，可以根據需要擴充
-                scalarLines.push(
-                  'scalarList.add(new HibernateScalarHelper("' + alias + '", StandardBasicTypes.STRING));'
-                );
-              }
+            if (genScalar && alias && alias.trim() !== '') {
+              scalarLines.push(
+                'scalarList.add(new HibernateScalarHelper("' + alias + '", StandardBasicTypes.STRING));'
+              );
             }
           } else {
             // 非 _LANG 結尾或不在 CASE 區塊內
@@ -163,43 +168,45 @@
               // 從欄位表達式中嘗試提取別名（例如 table.field）
               const parts = fieldExpr.split('.');
               if (parts.length > 1) {
-                alias = parts.pop()?.replace(/,$/, '').trim(); // 使用?. 避免 null
+                alias = parts.pop()?.replace(/,$/, '').trim();
               } else {
-                // 如果沒有點，可能是單純的欄位名，去除末尾可能的逗號
                 alias = fieldExpr.replace(/,$/, '').trim();
               }
             }
-            // 處理別名的大小寫轉換
             const aliasFinal = (alias && alias.trim() !== '') ? (useCamel ? toCamelCase(alias) : alias) : null;
 
-
             // 構建 append 的內容
-            let content = comma + fieldExpr;
+            sbLineContent = rawIndent + content + ' '; // 先加入縮排、逗號(若有)和原始程式碼，最後加空格
+
+            // 如果勾選了加 AS 且有別名，則添加到內容中
             if (addAs && aliasFinal) {
-              content += ' AS ' + aliasFinal;
+              // 注意：這裡將 AS 別名放在 append 內容裡
+              // 如果想讓 AS 別名獨立一個 append，需要調整邏輯
+              sbLineContent = rawIndent + comma + fieldExpr + ' AS ' + aliasFinal + ' ';
+            } else {
+              // 如果不加 AS 或沒有別名
+              sbLineContent = rawIndent + comma + fieldExpr + ' ';
             }
 
-            sbLine = 'sb.append(" ' + rawIndent + content + ' ");';
-            if (comment) sbLine += ' // ' + comment;
 
             // 產生 ScalarHelper
-            if (genScalar && aliasFinal) {
+            if (genScalar && aliasFinal && aliasFinal.trim() !== '') {
               scalarLines.push(
                 'scalarList.add(new HibernateScalarHelper("' + aliasFinal + '", StandardBasicTypes.STRING));'
               );
             }
           }
+          sbLines.push('sb.append("' + sbLineContent + '");' + (comment ? ' // ' + comment : ''));
+
         } else {
           // 非 SELECT 欄位行，直接 append
-          sbLine = 'sb.append(" ' + rawIndent + codeRaw + ' ");';
-          if (comment) sbLine += ' // ' + comment;
+          sbLineContent = rawIndent + codeRaw + ' '; // 加入縮排和程式碼，最後加空格
+          sbLines.push('sb.append("' + sbLineContent + '");' + (comment ? ' // ' + comment : ''));
         }
 
-        sbLines.push(sbLine);
 
         // 如果當前行是 CASE END，並且不是 CASE ... END 在同一行，才在這個地方關閉 insideCaseBlock
         if (isCaseEnd && !isCaseStart) insideCaseBlock = false;
-
 
       });
 
@@ -213,13 +220,24 @@
       }
     }
 
-    // 頁面內容載入後，執行初始化邏輯 (如果需要的話)
+    // 使用 addEventListener 綁定事件
     function initializeAddSbAppendTool() {
-        console.log("SQL to sb.append() Tool initialized.");
-        // 如果需要在載入時做任何事情，可以在這裡添加
+        console.log("SQL to sb.append() Tool initialized. Attaching event listeners.");
+        const convertBtn = document.getElementById('convertSqlBtn');
+        const copyButtons = document.querySelectorAll('.copy-button'); // 獲取所有複製按鈕
+
+        if (convertBtn) convertBtn.addEventListener('click', convertSql);
+
+        // 為每個複製按鈕添加事件監聽
+        copyButtons.forEach(button => {
+            const targetId = button.dataset.copyTarget; // 從 data 屬性獲取目標 ID
+            if (targetId) {
+                button.addEventListener('click', () => copyToClipboard(targetId));
+            }
+        });
     }
 
     // 當這個腳本被執行時，呼叫初始化函式
-    initializeAddSbAppendTool();
+    document.addEventListener('DOMContentLoaded', initializeAddSbAppendTool);
 
   </script>
