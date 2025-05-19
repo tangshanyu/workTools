@@ -7,59 +7,51 @@
   <label for="paramsInput" class="block text-gray-700 font-medium mb-1">參數（格式：[15761, 02, BCTOM0001, 2024/06/04]）：</label>
   <textarea id="paramsInput" class="w-full mb-4 font-mono p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-24 resize-y"></textarea>
 
-  <button onclick="replaceSQL()" class="w-full mb-4 bg-green-600 text-white py-2 rounded-md hover:bg-green-700 transition duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">轉換</button>
+    <button id="replaceSQLBtn" class="w-full mb-6 bg-green-600 text-white py-2 rounded-md hover:bg-green-700 transition duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">轉換</button>
 
   <h2 class="text-xl font-semibold mb-3 text-gray-800">轉換後的 SQL：</h2>
   <div id="output-container" class="mt-2 p-4 bg-gray-50 border border-gray-200 rounded-md relative">
-        <pre id="output" class="whitespace-pre-wrap font-mono text-gray-800 mb-4"></pre>
-    <button id="copyBtn" onclick="copySQL()" class="bg-teal-600 text-white py-2 px-4 rounded-md hover:bg-teal-700 transition duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2">複製</button>
+    <pre id="output" class="whitespace-pre-wrap font-mono text-gray-800 mb-4"></pre>
+        <button id="copyBtn" class="bg-teal-600 text-white py-2 px-4 rounded-md hover:bg-teal-700 transition duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2">複製</button>
   </div>
 
   <script>
     function escapeString(str) {
       if (str === null || str === undefined) {
-        return ''; // 或根據需要處理 null/undefined
+        return '';
       }
-      return String(str).replace(/'/g, "''"); // 確保是字串再處理
+      return String(str).replace(/'/g, "''");
     }
 
     function smartParseParams(text) {
       text = text.trim();
-      // 處理方括號，但更彈性，允許沒有方括號
       if (text.startsWith('[') && text.endsWith(']')) {
         text = text.substring(1, text.length - 1);
       }
 
-      // 使用 JSON.parse 嘗試解析，可以處理更多資料類型，更穩健
       try {
-        // 將字串轉換為有效的 JSON 陣列字串
         const jsonString = `[${text}]`;
         const parsedArray = JSON.parse(jsonString);
 
-        // 將解析出來的每個元素轉換為 SQL 字符串格式（加單引號並轉義）
         return parsedArray.map(item => {
-          // 處理 null 值
           if (item === null) {
-            return 'NULL'; // SQL 中的 NULL
+            return 'NULL';
           }
-          // 對字符串進行轉義並加上單引號
           return `'${escapeString(item)}'`;
         });
 
       } catch (e) {
         console.error("參數解析失敗:", e);
-        // 如果 JSON.parse 失敗，嘗試回退到簡單的 split 方法
         console.warn("嘗試使用簡單的逗號分隔解析...");
         try {
           const items = text.split(/\s*,\s*/);
           return items.map(item => `'${escapeString(item.trim())}'`);
         } catch (splitErr) {
           console.error("簡單分隔解析也失敗:", splitErr);
-          throw new Error("參數格式錯誤，請檢查輸入格式。"); // 拋出更明確的錯誤
+          throw new Error("參數格式錯誤，請檢查輸入格式。");
         }
       }
     }
-
 
     function replaceSQL() {
       const sqlInput = document.getElementById("sqlInput");
@@ -72,7 +64,6 @@
           return;
       }
 
-
       const sql = sqlInput.value;
       const rawParams = paramsInput.value;
 
@@ -80,8 +71,8 @@
       try {
         params = smartParseParams(rawParams);
       } catch (e) {
-        alert(e.message); // 顯示 smartParseParams 拋出的錯誤訊息
-        outputElement.innerText = ""; // 清空輸出
+        alert(e.message);
+        outputElement.innerText = "";
         return;
       }
 
@@ -93,12 +84,12 @@
         if (sql[sqlIndex] === '?') {
           if (paramIndex < params.length) {
             result += params[paramIndex++];
-            sqlIndex++; // 跳過 '?'
+            sqlIndex++;
           } else {
-            // 如果參數用完了，保留剩餘的問號
             result += '?';
             sqlIndex++;
-            alert("⚠️ SQL 中的問號比提供的參數多！");
+            // 避免重複彈出警告
+            // alert("⚠️ SQL 中的問號比提供的參數多！");
           }
         } else {
           result += sql[sqlIndex];
@@ -106,10 +97,12 @@
         }
       }
 
-
       if (paramIndex < params.length) {
         alert("⚠️ 有多餘的參數未被使用！");
-      }
+      } else if (paramIndex > 0 && paramIndex < sql.split('?').length - 1) { // 如果有參數被替換，但問號數量不匹配
+          alert("⚠️ SQL 中的問號數量與提供的參數數量不匹配！");
+      }
+
 
       outputElement.innerText = result;
     }
@@ -122,21 +115,43 @@
       }
       const outputText = outputElement.innerText;
 
-      navigator.clipboard.writeText(outputText).then(() => {
-        alert("SQL 已複製到剪貼簿！");
-      }).catch(err => {
-        console.error('複製失敗:', err);
-        alert("複製失敗，請手動複製。錯誤：" + err);
-      });
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(outputText).then(() => {
+          alert("SQL 已複製到剪貼簿！");
+        }).catch(err => {
+          console.error('複製失敗:', err);
+          alert("複製失敗，請手動複製。錯誤：" + err);
+        });
+      } else {
+          // Fallback for browsers that don't support navigator.clipboard
+          const range = document.createRange();
+          range.selectNodeContents(outputElement);
+          const selection = window.getSelection();
+          selection.removeAllRanges();
+          selection.addRange(range);
+          try {
+              document.execCommand('copy');
+              alert("SQL 已複製到剪貼簿！ (備用方案)");
+          } catch (err) {
+              console.error('備用複製方案失敗:', err);
+              alert("複製失敗，請手動複製。");
+          }
+          selection.removeAllRanges(); // 清除選取
+      }
     }
 
-    // 頁面內容載入後，執行初始化邏輯 (如果需要的話)
+    // 使用 addEventListener 綁定事件
     function initializeQuestionMarkTool() {
-        console.log("SQL Question Mark Tool initialized.");
-        // 如果需要在載入時做任何事情，可以在這裡添加
+        console.log("SQL Question Mark Tool initialized. Attaching event listeners.");
+        const replaceBtn = document.getElementById('replaceSQLBtn');
+        const copyBtn = document.getElementById('copyBtn');
+
+        if (replaceBtn) replaceBtn.addEventListener('click', replaceSQL);
+        if (copyBtn) copyBtn.addEventListener('click', copySQL);
+
     }
 
     // 當這個腳本被執行時，呼叫初始化函式
-    initializeQuestionMarkTool();
+    document.addEventListener('DOMContentLoaded', initializeQuestionMarkTool);
 
   </script>
