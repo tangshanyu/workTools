@@ -37,7 +37,7 @@
     <button id="copyBtn" onclick="copySQL()">複製</button>
   </div>
 
-  <script>
+  <script defer>
     function extractParams() {
       const sql = document.getElementById("sqlInput").value;
       const paramPattern = /'Parm\d+'/g;
@@ -68,7 +68,8 @@
       inputs.forEach(input => {
         const param = input.dataset.param;
         const replacement = input.value.trim();
-        sql = sql.replaceAll(param, `'${replacement.replace(/'/g, "''")}'`);
+        const escapedReplacement = replacement.replace(/'/g, "''");
+        sql = sql.replace(new RegExp(param.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g'), `'${escapedReplacement}'`);
       });
 
       document.getElementById("output").innerText = sql;

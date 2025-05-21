@@ -62,7 +62,7 @@
     &copy; <span id="currentYear"></span> 我的網站 ｜ 使用 GitHub Pages 製作
   </footer>
 
-  <script>
+  <script defer>
     // --- 漢堡選單控制邏輯 (來自原來的 immersive) ---
     const hamburgerButton = document.getElementById('hamburgerButton');
     const sidebar = document.getElementById('sidebar');
@@ -110,7 +110,7 @@
     // --- 動態內容載入邏輯 ---
     const contentArea = document.getElementById('content-area');
     const sidebarLinks = document.querySelectorAll('#sidebar nav a.nav-link');
-    const baseContentPath = 'contents/'; // 內容檔案的基礎路徑
+    const baseContentPath = './contents/'; // 修正為相對路徑
     const defaultPage = 'home.html';    // 預設載入的頁面
 
     // 載入內容到主區域
